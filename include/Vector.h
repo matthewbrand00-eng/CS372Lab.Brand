@@ -13,6 +13,57 @@ protected:
     std::size_t currentCapacity;
 
 public:
+    class iterator
+    {
+    private:
+        Vector<T>* vector;
+        std::size_t index;
+
+    public:
+        iterator(Vector<T>* vec, std::size_t position)
+            : vector(vec), index(position)
+        {
+        }
+
+        T& operator*() const
+        {
+            return (*vector)[index];
+        }
+
+        iterator& operator++()
+        {
+            ++index;
+            return *this;
+        }
+
+        iterator operator++(int)
+        {
+            iterator old = *this;
+            ++(*this);
+            return old;
+        }
+
+        bool operator==(const iterator& other) const
+        {
+            return vector == other.vector &&
+                   index == other.index;
+        }
+
+        bool operator!=(const iterator& other) const
+        {
+            return !(*this == other);
+        }
+    };
+
+    iterator begin()
+    {
+        return iterator(this, 0);
+    }
+
+    iterator end()
+    {
+        return iterator(this, currentSize);
+    }
     Vector();
     virtual ~Vector();
 
