@@ -54,5 +54,39 @@ int main()
 
     std::cout << '\n';
 
+    
+
+        // Test removing nodes
+    List<int> removalTest;
+    removalTest.push_back(10);
+    removalTest.push_back(20);
+    removalTest.push_back(30);
+
+    removalTest.pop_front();
+    removalTest.pop_back();
+
+    std::cout << "After removals: "
+            << removalTest.front() << std::endl;
+
+    // Test that copies are independent
+    List<int> originalTest;
+    originalTest.push_back(100);
+
+    List<int> copiedTest = originalTest;
+    copiedTest.push_back(200);
+
+    std::cout << "Original size: "
+            << originalTest.size() << std::endl;
+
+    std::cout << "Copy size: "
+            << copiedTest.size() << std::endl;
+
+    // Test removing every node
+    removalTest.pop_front();
+
+    std::cout << "Empty after removal: "
+            << removalTest.empty() << std::endl;
+
+            
     return 0;
 }

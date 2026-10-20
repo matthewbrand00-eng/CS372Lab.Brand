@@ -1,7 +1,9 @@
+
 #ifndef LIST_H
 #define LIST_H
 
 #include <cstddef>
+#include <memory>
 #include <utility>
 
 template <typename T>
@@ -11,11 +13,11 @@ private:
     struct Node
     {
         T data;
-        Node* prev;
-        Node* next;
+        std::weak_ptr<Node> prev;
+        std::shared_ptr<Node> next;
 
-        Node(const T& value = T{}, Node* p = nullptr, Node* n = nullptr)
-            : data(value), prev(p), next(n)
+        Node(const T& value = T{})
+            : data(value), prev(), next(nullptr)
         {
         }
     };
@@ -28,16 +30,10 @@ public:
     private:
         Node* current;
 
-        explicit iterator(Node* node)
-            : current(node)
-        {
-        }
+        explicit iterator(Node* node) : current(node) {}
 
     public:
-        iterator()
-            : current(nullptr)
-        {
-        }
+        iterator() : current(nullptr) {}
 
         T& operator*() const
         {
@@ -46,7 +42,7 @@ public:
 
         iterator& operator++()
         {
-            current = current->next;
+            current = current->next.get();
             return *this;
         }
 
@@ -59,7 +55,7 @@ public:
 
         iterator& operator--()
         {
-            current = current->prev;
+            current = current->prev.lock().get();
             return *this;
         }
 
@@ -81,16 +77,10 @@ public:
     private:
         const Node* current;
 
-        explicit const_iterator(const Node* node)
-            : current(node)
-        {
-        }
+        explicit const_iterator(const Node* node) : current(node) {}
 
     public:
-        const_iterator()
-            : current(nullptr)
-        {
-        }
+        const_iterator() : current(nullptr) {}
 
         const T& operator*() const
         {
@@ -99,7 +89,7 @@ public:
 
         const_iterator& operator++()
         {
-            current = current->next;
+            current = current->next.get();
             return *this;
         }
 
@@ -112,7 +102,7 @@ public:
 
         const_iterator& operator--()
         {
-            current = current->prev;
+            current = current->prev.lock().get();
             return *this;
         }
 
@@ -128,14 +118,14 @@ public:
     };
 
 protected:
-    Node* head;
-    Node* tail;
+    std::shared_ptr<Node> head;
+    std::shared_ptr<Node> tail;
     std::size_t listSize;
 
     void initialize()
     {
-        head = new Node;
-        tail = new Node;
+        head = std::make_shared<Node>();
+        tail = std::make_shared<Node>();
 
         head->next = tail;
         tail->prev = head;
@@ -145,10 +135,12 @@ protected:
 
     void clear()
     {
-        while (!empty())
-        {
-            pop_front();
-        }
+        if (!head || !tail)
+            return;
+
+        head->next = tail;
+        tail->prev = head;
+        listSize = 0;
     }
 
 public:
@@ -157,10 +149,8 @@ public:
         initialize();
     }
 
-    List(const List& other)
+    List(const List& other) : List()
     {
-        initialize();
-
         for (const auto& item : other)
         {
             push_back(item);
@@ -171,50 +161,35 @@ public:
     {
         if (this != &other)
         {
-            clear();
-
-            for (const auto& item : other)
-            {
-                push_back(item);
-            }
+            List temp(other);
+            swap(temp);
         }
-
         return *this;
     }
 
-    List(List&& other) noexcept
-        : head(other.head),
-          tail(other.tail),
-          listSize(other.listSize)
+    List(List&& other) : List()
     {
-        other.initialize();
+        swap(other);
     }
 
-    List& operator=(List&& other) noexcept
+    List& operator=(List&& other)
     {
         if (this != &other)
         {
-            clear();
-
-            delete head;
-            delete tail;
-
-            head = other.head;
-            tail = other.tail;
-            listSize = other.listSize;
-
-            other.initialize();
+            swap(other);
+            other.clear();
         }
-
         return *this;
     }
 
-    virtual ~List()
-    {
-        clear();
+    virtual ~List() = default;
 
-        delete head;
-        delete tail;
+    void swap(List& other) noexcept
+    {
+        using std::swap;
+        swap(head, other.head);
+        swap(tail, other.tail);
+        swap(listSize, other.listSize);
     }
 
     bool empty() const
@@ -239,12 +214,12 @@ public:
 
     T& back()
     {
-        return tail->prev->data;
+        return tail->prev.lock()->data;
     }
 
     const T& back() const
     {
-        return tail->prev->data;
+        return tail->prev.lock()->data;
     }
 
     void push_front(const T& value)
@@ -269,18 +244,17 @@ public:
     {
         if (!empty())
         {
-            iterator temp(tail->prev);
-            erase(temp);
+            erase(iterator(tail->prev.lock().get()));
         }
     }
 
     T& operator[](std::size_t index)
     {
-        Node* current = head->next;
+        Node* current = head->next.get();
 
         for (std::size_t i = 0; i < index; ++i)
         {
-            current = current->next;
+            current = current->next.get();
         }
 
         return current->data;
@@ -288,11 +262,11 @@ public:
 
     const T& operator[](std::size_t index) const
     {
-        const Node* current = head->next;
+        const Node* current = head->next.get();
 
         for (std::size_t i = 0; i < index; ++i)
         {
-            current = current->next;
+            current = current->next.get();
         }
 
         return current->data;
@@ -300,71 +274,69 @@ public:
 
     iterator begin()
     {
-        return iterator(head->next);
+        return iterator(head->next.get());
     }
 
     iterator end()
     {
-        return iterator(tail);
+        return iterator(tail.get());
     }
 
     const_iterator begin() const
     {
-        return const_iterator(head->next);
+        return const_iterator(head->next.get());
     }
 
     const_iterator end() const
     {
-        return const_iterator(tail);
+        return const_iterator(tail.get());
     }
 
     const_iterator cbegin() const
     {
-        return const_iterator(head->next);
+        return const_iterator(head->next.get());
     }
 
     const_iterator cend() const
     {
-        return const_iterator(tail);
+        return const_iterator(tail.get());
     }
 
     iterator insert(iterator position, const T& value)
     {
         Node* current = position.current;
+        auto previous = current->prev.lock();
+        auto newNode = std::make_shared<Node>(value);
 
-        Node* newNode = new Node(
-            value,
-            current->prev,
-            current
-        );
+        newNode->prev = previous;
+        newNode->next = previous->next;
 
-        current->prev->next = newNode;
+        previous->next = newNode;
         current->prev = newNode;
 
         ++listSize;
 
-        return iterator(newNode);
+        return iterator(newNode.get());
     }
 
     iterator erase(iterator position)
     {
         Node* current = position.current;
 
-        if (current == tail)
+        if (current == tail.get())
         {
             return end();
         }
 
-        Node* nextNode = current->next;
+        auto previous = current->prev.lock();
+        auto nextNode = current->next;
 
-        current->prev->next = current->next;
-        current->next->prev = current->prev;
-
-        delete current;
+        previous->next = nextNode;
+        nextNode->prev = previous;
 
         --listSize;
 
-        return iterator(nextNode);
+        return iterator(nextNode.get());
     }
 
     iterator erase(iterator first, iterator last)
